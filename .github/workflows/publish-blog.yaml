@@ -9,10 +9,11 @@ on:
       - 'authors/**'
       - 'settings/**'
       - 'uploads/**'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: example/gitops-blog-frontend
+  IMAGE_NAME: plus-jia/gitops-blog-frontend
 
 jobs:
   build:
@@ -30,14 +31,14 @@ jobs:
       - name: Checkout frontend
         uses: actions/checkout@v4
         with:
-          repository: example/gitops-blog-frontend
+          repository: plus-jia/gitops-blog-frontend
           token: ${{ secrets.CI_GITHUB_TOKEN }}
           path: gitops-blog-frontend
 
       - name: Checkout manifests
         uses: actions/checkout@v4
         with:
-          repository: example/gitops-blog-manifests
+          repository: plus-jia/gitops-blog-manifests
           token: ${{ secrets.CI_GITHUB_TOKEN }}
           path: gitops-blog-manifests
 
@@ -47,7 +48,10 @@ jobs:
           rm -rf gitops-blog-frontend/src/content/authors
           rm -rf gitops-blog-frontend/src/content/settings
           rm -rf gitops-blog-frontend/public/uploads
+
           mkdir -p gitops-blog-frontend/src/content
+          mkdir -p gitops-blog-frontend/public
+
           cp -r gitops-blog-content/posts gitops-blog-frontend/src/content/posts
           cp -r gitops-blog-content/authors gitops-blog-frontend/src/content/authors
           cp -r gitops-blog-content/settings gitops-blog-frontend/src/content/settings
@@ -63,8 +67,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: plus-jia
+          password: ${{ secrets.CI_GITHUB_TOKEN }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -80,5 +84,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/blog/overlays/dev/kustomization.yaml
-          git commit -m "chore: publish blog ${{ github.sha }}"
+          git commit -m "chore: publish blog ${{ github.sha }}" || echo "No changes to commit"
           git push
