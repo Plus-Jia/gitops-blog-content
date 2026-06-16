@@ -1,0 +1,84 @@
+name: Publish Blog
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'posts/**'
+      - 'authors/**'
+      - 'settings/**'
+      - 'uploads/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: example/gitops-blog-frontend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout content
+        uses: actions/checkout@v4
+        with:
+          path: gitops-blog-content
+
+      - name: Checkout frontend
+        uses: actions/checkout@v4
+        with:
+          repository: example/gitops-blog-frontend
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+          path: gitops-blog-frontend
+
+      - name: Checkout manifests
+        uses: actions/checkout@v4
+        with:
+          repository: example/gitops-blog-manifests
+          token: ${{ secrets.CI_GITHUB_TOKEN }}
+          path: gitops-blog-manifests
+
+      - name: Copy content into frontend
+        run: |
+          rm -rf gitops-blog-frontend/src/content/posts
+          rm -rf gitops-blog-frontend/src/content/authors
+          rm -rf gitops-blog-frontend/src/content/settings
+          rm -rf gitops-blog-frontend/public/uploads
+          mkdir -p gitops-blog-frontend/src/content
+          cp -r gitops-blog-content/posts gitops-blog-frontend/src/content/posts
+          cp -r gitops-blog-content/authors gitops-blog-frontend/src/content/authors
+          cp -r gitops-blog-content/settings gitops-blog-frontend/src/content/settings
+          cp -r gitops-blog-content/uploads gitops-blog-frontend/public/uploads
+
+      - name: Install and build
+        working-directory: gitops-blog-frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: gitops-blog-frontend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Update manifests image tag
+        working-directory: gitops-blog-manifests
+        run: |
+          sed -i "s/newTag: .*/newTag: ${{ github.sha }}/" apps/blog/overlays/dev/kustomization.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/blog/overlays/dev/kustomization.yaml
+          git commit -m "chore: publish blog ${{ github.sha }}"
+          git push
